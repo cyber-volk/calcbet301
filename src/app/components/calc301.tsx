@@ -980,7 +980,6 @@ interface HistorySliderProps {
   handleVoiceInputWithFeedback: (callback: (value: string) => void, isNumberField?: boolean) => void
   voiceLanguage: VoiceLanguage
   addRow: (tableType: 'credit' | 'creditPayee' | 'depense' | 'retrait') => void
-  // Add these new props
   onDeleteSite: (siteIndex: number) => void
   onSiteChange: (index: number) => void
   onLoadForm: (form: Form) => void
@@ -989,6 +988,7 @@ interface HistorySliderProps {
   currentSiteIndex: number
   setCurrentSiteIndex: (index: number) => void
   setCurrentFormIndex: (index: number) => void
+  setSites: (sites: Site[] | ((prevSites: Site[]) => Site[])) => void  // Add this line
 }
 
 function HistorySlider(props: HistorySliderProps) {
@@ -1014,26 +1014,28 @@ function HistorySlider(props: HistorySliderProps) {
   // Update handleDeleteSite function to use props
   const handleDeleteSite = (siteIndex: number) => {
     if (siteIndex === 0) {
-      alert("Cannot delete the default site")
-      return
+      alert("Cannot delete the default site");
+      return;
     }
 
-    const newSites = props.sites.filter((_, index: number) => index !== siteIndex)
+    const newSites = [...props.sites];
+    newSites.splice(siteIndex, 1); // Remove the site at siteIndex
     
-    // Update currentSiteIndex and load appropriate form
-    const newSiteIndex = Math.max(0, props.currentSiteIndex - 1)
-    props.setCurrentSiteIndex(newSiteIndex)
-    props.setCurrentFormIndex(0) // Reset to first form of the new current site
+    // Update current indices
+    const newSiteIndex = Math.max(0, siteIndex - 1);
     
-    // Load the form from the new current site
+    // Set the new sites array first
+    props.setSites(newSites);
+    
+    // Then update indices and load form
+    props.setCurrentSiteIndex(newSiteIndex);
+    props.setCurrentFormIndex(0); // Always reset to first form
+    
+    // Load the first form of the new current site
     if (newSites[newSiteIndex] && newSites[newSiteIndex].forms[0]) {
-      props.onLoadForm(newSites[newSiteIndex].forms[0])
-    } else {
-      props.onReset() // Fallback to reset if no form is available
+      props.onLoadForm(newSites[newSiteIndex].forms[0]);
     }
-
-    props.onDeleteSite(siteIndex)
-  }
+  };
 
   const handleFormClick = (form: Form, index: number) => {
     if (!form) return; // Add safety check
@@ -1166,6 +1168,23 @@ function SiteCard({
     setEditedName(site.name)
   }, [site.name])
 
+  // Add safety checks for calculating total
+  const calculateTotal = () => {
+    if (!site.forms || !Array.isArray(site.forms)) return '0.0';
+    
+    return site.forms.reduce((total, form) => {
+      if (!form || !form.result) return total;
+      
+      try {
+        const result = parseFloat((form.result || '').replace('Total: ', '')) || 0;
+        return total + result;
+      } catch (error) {
+        console.error('Error parsing form result:', error);
+        return total;
+      }
+    }, 0).toFixed(1);
+  };
+
   return (
     <div 
       className={`
@@ -1260,12 +1279,9 @@ function SiteCard({
         onClick={() => onSelect(site.id)}
         className="space-y-2"
       >
-        <p>Forms: {site.forms.length}</p>
+        <p>Forms: {site.forms?.length || 0}</p>
         <p className="font-semibold">
-          Total: {site.forms.reduce((total, form) => {
-            const result = parseFloat(form.result.replace('Total: ', '')) || 0
-            return total + result
-          }, 0).toFixed(1)}
+          Total: {calculateTotal()}
         </p>
         <p className="text-sm text-gray-500">
           Updated {formatDistanceToNow(new Date(site.statistics.lastUpdated), { addSuffix: true })}
@@ -1325,13 +1341,17 @@ function SiteCarousel({
     }, 100)
   }
 
-  // Calculate total sites result
+  // Add safety checks for calculating total
   const totalSitesResult = sites.reduce((total: number, site) => {
+    if (!site.forms || !Array.isArray(site.forms)) return total;
+    
     return total + site.forms.reduce((formTotal: number, form) => {
-      const result = parseFloat(form.result.replace('Total: ', '')) || 0
-      return formTotal + result
-    }, 0)
-  }, 0).toFixed(1)
+      if (!form || typeof form.result !== 'string') return formTotal;
+      
+      const result = parseFloat((form.result || '').replace('Total: ', '')) || 0;
+      return formTotal + result;
+    }, 0);
+  }, 0).toFixed(1);
 
   return (
     <div className="relative w-full overflow-hidden mb-8">
@@ -1708,7 +1728,6 @@ export default function NewCalculator() {
       total + parseFloat(row.totalClient || '0'), 0)
     const totalCreditPayee = creditPayeeRows.reduce((total: number, row: CreditPayeeRow) => 
       total + parseFloat(row.totalPayee || '0'), 0)
-
     const totalDepense = depenseRows.reduce((total: number, row: DepenseRow) => 
       total + parseFloat(row.totalDepense || '0'), 0)
     const selectedMultiplier = parseFloat(multiplier)
@@ -2037,8 +2056,10 @@ export default function NewCalculator() {
 
   // Add handleAddForm function
   const handleAddForm = () => {
+    const currentForms = sites[currentSiteIndex]?.forms || [];
+    
     // Check if we've reached the form limit
-    if (sites[currentSiteIndex].forms.length >= MAX_FORMS_PER_SITE) {
+    if (currentForms.length >= MAX_FORMS_PER_SITE) {
       alert(`Maximum limit of ${MAX_FORMS_PER_SITE} forms per site reached`);
       return;
     }
@@ -2059,24 +2080,11 @@ export default function NewCalculator() {
       calculationHistory: []
     };
 
-    const updatedForms = [...sites[currentSiteIndex].forms];
-    updatedForms[currentFormIndex] = {
-      ...updatedForms[currentFormIndex],
-      creditRows: [...creditRows],
-      creditPayeeRows: [...creditPayeeRows],
-      depenseRows: [...depenseRows],
-      retraitRows: [...retraitRows],
-      fond,
-      soldeALinstant,
-      soldeDeDebut,
-      multiplier,
-      result
-    };
-
     const updatedSite = {
       ...sites[currentSiteIndex],
-      forms: [...updatedForms, newForm]
+      forms: [...currentForms, newForm]
     };
+
     handleUpdateSite(currentSiteIndex, updatedSite);
     setCurrentFormIndex(updatedSite.forms.length - 1);
     handleReset();
@@ -2110,6 +2118,7 @@ export default function NewCalculator() {
         if (field === 'details') {
           const numbers = value.split('+')
             .map(num => parseFloat(num.trim()))
+            .filter(num => !isNaN(num))
           const total = numbers.reduce((acc, num) => acc + num, 0)
           newCreditPayeeRows[index].totalPayee = total.toFixed(1)
         }
@@ -2187,12 +2196,13 @@ export default function NewCalculator() {
               </button>
               <div className="flex items-center">
                 <span className="text-lg font-semibold mr-2">
-                  Form {currentFormIndex + 1} / {sites[currentSiteIndex].forms.length}
+                  Form {currentFormIndex + 1} of {sites[currentSiteIndex]?.forms?.length || 1}
                 </span>
-                {sites[currentSiteIndex].forms.length < MAX_FORMS_PER_SITE && (
+                {(sites[currentSiteIndex]?.forms?.length || 0) < MAX_FORMS_PER_SITE && (
                   <button
                     onClick={handleAddForm}
                     className="p-1 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                    title={`Add Form (${sites[currentSiteIndex]?.forms?.length || 0}/${MAX_FORMS_PER_SITE})`}
                   >
                     <Plus size={20} />
                   </button>
@@ -2200,7 +2210,7 @@ export default function NewCalculator() {
               </div>
               <button
                 onClick={handleNextForm}
-                disabled={currentFormIndex === sites[currentSiteIndex].forms.length - 1}
+                disabled={currentFormIndex >= ((sites[currentSiteIndex]?.forms?.length || 1) - 1)}
                 className="p-2 rounded-full bg-gray-200 disabled:opacity-50"
               >
                 <ChevronRight size={24} />
@@ -2782,6 +2792,7 @@ export default function NewCalculator() {
               currentSiteIndex={currentSiteIndex}
               setCurrentSiteIndex={setCurrentSiteIndex}
               setCurrentFormIndex={setCurrentFormIndex}
+              setSites={setSites}  // Add this line
             />
           </div>
         </div>
