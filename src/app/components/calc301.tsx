@@ -1317,18 +1317,20 @@ function SiteCarousel({
             />
           </div>
         ))}
-        <div className="snap-start">
-          <button
-            onClick={handleAddSite}
-            className="flex-shrink-0 w-[280px] h-[200px] bg-white rounded-lg shadow-lg hover:shadow-xl transition-all flex flex-col items-center justify-center gap-4"
-          >
-            <div className="text-lg font-semibold text-gray-600">
-              Total Sites: {totalSitesResult}
-            </div>
-            <Plus size={24} className="text-gray-400" />
-            <span className="text-gray-600">Add New Site</span>
-          </button>
-        </div>
+        {sites.length < MAX_SITES && (
+          <div className="snap-start">
+            <button
+              onClick={handleAddSite}
+              className="flex-shrink-0 w-[280px] h-[200px] bg-white rounded-lg shadow-lg hover:shadow-xl transition-all flex flex-col items-center justify-center gap-4"
+            >
+              <div className="text-lg font-semibold text-gray-600">
+                Total Sites: {totalSitesResult}
+              </div>
+              <Plus size={24} className="text-gray-400" />
+              <span className="text-gray-600">Add New Site ({sites.length}/{MAX_SITES})</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -1464,6 +1466,10 @@ interface SpeechRecognitionEvent {
     };
   };
 }
+
+// Add these constants at the top of the file with other constants
+const MAX_FORMS_PER_SITE = 5;
+const MAX_SITES = 20;
 
 // Main Calculator Component
 export default function NewCalculator() {
@@ -1888,6 +1894,12 @@ export default function NewCalculator() {
 
   // FIXED: Updated handleAddSite to include siteColor
   const handleAddSite = () => {
+    // Check if we've reached the site limit
+    if (sites.length >= MAX_SITES) {
+      alert(`Maximum limit of ${MAX_SITES} sites reached`);
+      return;
+    }
+
     const newSite: Site = {
       id: crypto.randomUUID(),
       name: `New Site ${sites.length + 1}`,
@@ -1905,7 +1917,7 @@ export default function NewCalculator() {
         soldeDeDebut: '',
         site: `New Site ${sites.length + 1}`,
         multiplier: '1.1',
-        siteColor: 'none',  // FIXED: Added siteColor initialization
+        siteColor: 'none',
         calculationHistory: []
       }],
       statistics: {
@@ -1992,6 +2004,12 @@ export default function NewCalculator() {
 
   // Add handleAddForm function
   const handleAddForm = () => {
+    // Check if we've reached the form limit
+    if (sites[currentSiteIndex].forms.length >= MAX_FORMS_PER_SITE) {
+      alert(`Maximum limit of ${MAX_FORMS_PER_SITE} forms per site reached`);
+      return;
+    }
+
     const newForm: Form = {
       id: crypto.randomUUID(),
       result: '',
@@ -2006,9 +2024,9 @@ export default function NewCalculator() {
       site: sites[currentSiteIndex].name,
       multiplier: '1.1',
       calculationHistory: []
-    }
+    };
 
-    const updatedForms = [...sites[currentSiteIndex].forms]
+    const updatedForms = [...sites[currentSiteIndex].forms];
     updatedForms[currentFormIndex] = {
       ...updatedForms[currentFormIndex],
       creditRows: [...creditRows],
@@ -2020,16 +2038,16 @@ export default function NewCalculator() {
       soldeDeDebut,
       multiplier,
       result
-    }
+    };
 
     const updatedSite = {
       ...sites[currentSiteIndex],
       forms: [...updatedForms, newForm]
-    }
-    handleUpdateSite(currentSiteIndex, updatedSite)
-    setCurrentFormIndex(updatedSite.forms.length - 1)
-    handleReset()
-  }
+    };
+    handleUpdateSite(currentSiteIndex, updatedSite);
+    setCurrentFormIndex(updatedSite.forms.length - 1);
+    handleReset();
+  };
 
   // Add inside NewCalculator component, the missing updateRow function
   const updateRow = (
@@ -2138,12 +2156,14 @@ export default function NewCalculator() {
                 <span className="text-lg font-semibold mr-2">
                   Form {currentFormIndex + 1} / {sites[currentSiteIndex].forms.length}
                 </span>
-                <button
-                  onClick={handleAddForm}
-                  className="p-1 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-colors"
-                >
-                  <Plus size={20} />
-                </button>
+                {sites[currentSiteIndex].forms.length < MAX_FORMS_PER_SITE && (
+                  <button
+                    onClick={handleAddForm}
+                    className="p-1 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                  >
+                    <Plus size={20} />
+                  </button>
+                )}
               </div>
               <button
                 onClick={handleNextForm}
