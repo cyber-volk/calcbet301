@@ -980,51 +980,84 @@ interface HistorySliderProps {
   handleVoiceInputWithFeedback: (callback: (value: string) => void, isNumberField?: boolean) => void
   voiceLanguage: VoiceLanguage
   addRow: (tableType: 'credit' | 'creditPayee' | 'depense' | 'retrait') => void
+  // Add these new props
+  onDeleteSite: (siteIndex: number) => void
+  onSiteChange: (index: number) => void
+  onLoadForm: (form: Form) => void
+  onReset: () => void
+  sites: Site[]
+  currentSiteIndex: number
+  setCurrentSiteIndex: (index: number) => void
+  setCurrentFormIndex: (index: number) => void
 }
 
-function HistorySlider({ 
-  forms, 
-  currentFormIndex, 
-  onFormSelect, 
-  siteColor,
-  removeRow,
-  updateRow,
-  handleVoiceInputWithFeedback,
-  voiceLanguage,
-  addRow
-}: HistorySliderProps) {
+function HistorySlider(props: HistorySliderProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [previewForm, setPreviewForm] = useState<Form | null>(null)
   const [previewIndex, setPreviewIndex] = useState<number>(0)
   const sliderRef = useRef<HTMLDivElement>(null)
 
-  // Get current form and its history
-  const currentForm = forms[currentFormIndex]
-  const calculationHistory = currentForm.calculationHistory || []
+  // Add safety checks for current form
+  const currentForm = props.forms[props.currentFormIndex]
+  if (!currentForm) {
+    return null; // Return early if no form exists
+  }
+
+  // Safely access calculation history with fallback
+  const calculationHistory = currentForm?.calculationHistory || []
   
   // Filter history entries with results
   const historyWithResults = calculationHistory.filter(entry => 
-    entry.result && entry.result !== 'Total: 0.0'
+    entry && entry.result && entry.result !== 'Total: 0.0'
   )
 
+  // Update handleDeleteSite function to use props
+  const handleDeleteSite = (siteIndex: number) => {
+    if (siteIndex === 0) {
+      alert("Cannot delete the default site")
+      return
+    }
+
+    const newSites = props.sites.filter((_, index: number) => index !== siteIndex)
+    
+    // Update currentSiteIndex and load appropriate form
+    const newSiteIndex = Math.max(0, props.currentSiteIndex - 1)
+    props.setCurrentSiteIndex(newSiteIndex)
+    props.setCurrentFormIndex(0) // Reset to first form of the new current site
+    
+    // Load the form from the new current site
+    if (newSites[newSiteIndex] && newSites[newSiteIndex].forms[0]) {
+      props.onLoadForm(newSites[newSiteIndex].forms[0])
+    } else {
+      props.onReset() // Fallback to reset if no form is available
+    }
+
+    props.onDeleteSite(siteIndex)
+  }
+
   const handleFormClick = (form: Form, index: number) => {
+    if (!form) return; // Add safety check
     setPreviewForm(form)
     setPreviewIndex(index)
   }
 
   const handleNavigate = (direction: 'prev' | 'next') => {
+    if (!historyWithResults.length) return; // Add safety check
+    
     const currentPosition = previewIndex
     const newPosition = direction === 'prev' ? currentPosition - 1 : currentPosition + 1
     
     if (newPosition >= 0 && newPosition < historyWithResults.length) {
       const entry = historyWithResults[newPosition]
-      setPreviewIndex(newPosition)
-      setPreviewForm(entry)
+      if (entry) { // Add safety check
+        setPreviewIndex(newPosition)
+        setPreviewForm(entry)
+      }
     }
   }
 
   const handleRestore = (form: Form) => {
-    onFormSelect(currentFormIndex, form)
+    props.onFormSelect(props.currentFormIndex, form)
   }
 
   return (
@@ -1036,7 +1069,7 @@ function HistorySlider({
         />
       )}
 
-      <div className={`fixed bottom-0 left-0 right-0 ${SITE_COLORS[siteColor].bg} border-t border-gray-200 p-4 z-40`}>
+      <div className={`fixed bottom-0 left-0 right-0 ${SITE_COLORS[props.siteColor].bg} border-t border-gray-200 p-4 z-40`}>
         {!isOpen ? (
           <div className="absolute left-1/2 -translate-x-1/2 -top-5">
             <button
@@ -1084,12 +1117,12 @@ function HistorySlider({
             onNavigate={handleNavigate}
             isFirstForm={previewIndex === 0}
             isLastForm={previewIndex === historyWithResults.length - 1}
-            siteColor={siteColor}
-            removeRow={removeRow}
-            updateRow={updateRow}
-            handleVoiceInputWithFeedback={handleVoiceInputWithFeedback}
-            voiceLanguage={voiceLanguage}
-            addRow={addRow}
+            siteColor={props.siteColor}
+            removeRow={props.removeRow}
+            updateRow={props.updateRow}
+            handleVoiceInputWithFeedback={props.handleVoiceInputWithFeedback}
+            voiceLanguage={props.voiceLanguage}
+            addRow={props.addRow}
           />
         )}
       </div>
@@ -2741,6 +2774,14 @@ export default function NewCalculator() {
               handleVoiceInputWithFeedback={handleVoiceInputWithFeedback}
               voiceLanguage={voiceLanguage}
               addRow={addRow}
+              onDeleteSite={handleDeleteSite}
+              onSiteChange={handleSiteChange}
+              onLoadForm={loadForm}
+              onReset={handleReset}
+              sites={sites}
+              currentSiteIndex={currentSiteIndex}
+              setCurrentSiteIndex={setCurrentSiteIndex}
+              setCurrentFormIndex={setCurrentFormIndex}
             />
           </div>
         </div>
