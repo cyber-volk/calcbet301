@@ -1519,13 +1519,102 @@ export default function NewCalculator() {
   const [currentSiteIndex, setCurrentSiteIndex] = useLocalStorage('current-site-index', 0)
   const [currentFormIndex, setCurrentFormIndex] = useLocalStorage('current-form-index', 0)
 
-  // Add useEffect for initialization
+  // FIXED: Added proper state initialization and form data persistence
   useEffect(() => {
-    setMounted(true)
-    if (sites[currentSiteIndex]) {
-      setSite(sites[currentSiteIndex].name)
+    if (!mounted) {
+      setMounted(true);
+      return;
     }
-  }, [sites, currentSiteIndex])
+
+    // FIXED: Load form data only when site or form index changes
+    if (sites[currentSiteIndex]) {
+      const currentForm = sites[currentSiteIndex].forms[currentFormIndex];
+      if (currentForm) {
+        // FIXED: Added default values for all fields to prevent undefined states
+        setMultiplier(currentForm.multiplier || '1.1');
+        setFond(currentForm.fond || '');
+        setSoldeALinstant(currentForm.soldeALinstant || '');
+        setSite(sites[currentSiteIndex].name || '');
+        setSoldeDeDebut(currentForm.soldeDeDebut || '');
+        setCreditRows(currentForm.creditRows.length > 0 ? currentForm.creditRows : [{ totalClient: '', details: '', client: '' }]);
+        setCreditPayeeRows(currentForm.creditPayeeRows.length > 0 ? currentForm.creditPayeeRows : [{ totalPayee: '', details: '', client: '' }]);
+        setDepenseRows(currentForm.depenseRows.length > 0 ? currentForm.depenseRows : [{ totalDepense: '', details: '', client: '' }]);
+        setRetraitRows(currentForm.retraitRows.length > 0 ? currentForm.retraitRows : [{ retraitPayee: '', retrait: '', client: '' }]);
+        setResult(currentForm.result || '');
+      }
+    }
+  }, [mounted, currentSiteIndex, currentFormIndex]); // FIXED: Reduced dependencies to prevent unnecessary rerenders
+
+  // FIXED: Added debounced save effect to prevent rapid state updates
+  useEffect(() => {
+    if (!mounted) return;
+
+    // FIXED: Added 500ms debounce to prevent performance issues
+    const saveTimeout = setTimeout(() => {
+      try {
+        const updatedSites = [...sites];
+        // FIXED: Ensure all form data is properly saved
+        const currentForm = {
+          ...updatedSites[currentSiteIndex].forms[currentFormIndex],
+          id: updatedSites[currentSiteIndex].forms[currentFormIndex].id || crypto.randomUUID(),
+          multiplier,
+          fond,
+          soldeALinstant,
+          site,
+          soldeDeDebut,
+          creditRows,
+          creditPayeeRows,
+          depenseRows,
+          retraitRows,
+          result,
+          timestamp: new Date().toISOString()
+        };
+
+        updatedSites[currentSiteIndex].forms[currentFormIndex] = currentForm;
+        updatedSites[currentSiteIndex].statistics.lastUpdated = new Date().toISOString();
+        
+        setSites(updatedSites);
+      } catch (error) {
+        console.error('Error saving state:', error);
+      }
+    }, 500); // FIXED: Added debounce delay
+
+    return () => clearTimeout(saveTimeout);
+  }, [
+    mounted,
+    multiplier,
+    fond,
+    soldeALinstant,
+    site,
+    soldeDeDebut,
+    creditRows,
+    creditPayeeRows,
+    depenseRows,
+    retraitRows,
+    result
+  ]);
+
+  // FIXED: Updated loadForm function with better error handling
+  const loadForm = (form: Form) => {
+    if (!form) return;
+    try {
+      // FIXED: Added default values and array checks
+      setMultiplier(form.multiplier || '1.1');
+      setFond(form.fond || '');
+      setSoldeALinstant(form.soldeALinstant || '');
+      setSite(form.site || '');
+      setSoldeDeDebut(form.soldeDeDebut || '');
+      setCreditRows(form.creditRows.length > 0 ? form.creditRows : [{ totalClient: '', details: '', client: '' }]);
+      setCreditPayeeRows(form.creditPayeeRows.length > 0 ? form.creditPayeeRows : [{ totalPayee: '', details: '', client: '' }]);
+      setDepenseRows(form.depenseRows.length > 0 ? form.depenseRows : [{ totalDepense: '', details: '', client: '' }]);
+      setRetraitRows(form.retraitRows.length > 0 ? form.retraitRows : [{ retraitPayee: '', retrait: '', client: '' }]);
+      setResult(form.result || '');
+    } catch (error) {
+      console.error('Error loading form:', error);
+      // FIXED: Added error recovery by resetting to default values
+      handleReset();
+    }
+  };
 
   // Helper functions
   const validateInput = (value: string, errorKey: ErrorKeys, isMandatory = false) => {
@@ -1626,7 +1715,6 @@ export default function NewCalculator() {
         lastUpdated: new Date().toISOString()
       }
     }
-
     handleUpdateSite(currentSiteIndex, updatedSite)
   }
 
@@ -1711,21 +1799,6 @@ export default function NewCalculator() {
     handleUpdateSite(currentSiteIndex, updatedSite)
     setCurrentFormIndex(Math.max(0, currentFormIndex - 1))
     loadForm(updatedForms[Math.max(0, currentFormIndex - 1)])
-  }
-
-  // Add loadForm function
-  const loadForm = (form: Form) => {
-    if (!form) return
-    setMultiplier(form.multiplier)
-    setFond(form.fond)
-    setSoldeALinstant(form.soldeALinstant)
-    setSite(form.site)
-    setSoldeDeDebut(form.soldeDeDebut)
-    setCreditRows(form.creditRows.map(row => ({...row})))
-    setCreditPayeeRows(form.creditPayeeRows.map(row => ({...row})))
-    setDepenseRows(form.depenseRows.map(row => ({...row})))
-    setRetraitRows(form.retraitRows.map(row => ({...row})))
-    setResult(form.result)
   }
 
   // Add voice input handling functions
@@ -1813,7 +1886,7 @@ export default function NewCalculator() {
     loadForm(sites[index].forms[0])
   }
 
-  // Add handleAddSite function
+  // FIXED: Updated handleAddSite to include siteColor
   const handleAddSite = () => {
     const newSite: Site = {
       id: crypto.randomUUID(),
@@ -1832,7 +1905,7 @@ export default function NewCalculator() {
         soldeDeDebut: '',
         site: `New Site ${sites.length + 1}`,
         multiplier: '1.1',
-        siteColor: 'none',  // Add this line
+        siteColor: 'none',  // FIXED: Added siteColor initialization
         calculationHistory: []
       }],
       statistics: {
